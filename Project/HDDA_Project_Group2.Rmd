@@ -1,0 +1,471 @@
+---
+title: "HDDA_Project_Group2"
+author: "MAIRAME SAMBA NIANG, NDEYE BINTA NDIAYE, Gaolatlhe Angelah, Jean-Baptiste Moute
+date: "2026-01-21"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Part 1
+
+```{r include = FALSE, echo=FALSE}
+library("FactoMineR")
+library("factoextra")
+library("ca")
+```
+
+### Singular Value Decomposition.
+
+It is a mathematical tool used to simplify a matrix by factorizing it into three simpler matrix. The matrix will be decomposed into two orthogonal matrices, one with left singular vectors (eigenvectors of AA^T) and the other with the transpose of the right singular vectors (eigenvectors of A^TA) of the matrix and the third a diagonal matrix whose entries are single values of the matrix (in descending order).
+
+As an example, let us perform Singular Value Decomposition on a matrix of our choice. 
+
+```{r}
+# Define your matrix
+A <- matrix(c(-1, 3, 2, 4), nrow = 2, ncol = 2)
+
+# Calculate the transpose
+A_transpose <- t(A)
+
+# Compute AA^T
+AA_transpose <- A %*% t(A)
+
+# Find the Eigenvalues of AA^T
+ev <- eigen(AA_transpose)
+eigenvalues <- ev$values
+
+# Find the right singular vectors
+A_transposeA <- t(A) %*% A
+ev_v <- eigen(A_transposeA)
+V <- ev_v$vectors
+V_transpose <- t(V)
+
+# Compute the diagonal matrix
+singular_values <- sqrt(ev_v$values)
+Sigma <- diag(singular_values)
+
+# Compute the left singular vectors
+U <- A %*% V %*% solve(Sigma)
+
+# Compute the final SVD equation
+SDVeq <- U %*% Sigma %*% V_transpose
+
+
+print(A)
+print(U)
+print(Sigma)
+print(V_transpose)
+```
+
+In practice, SDV is useful in dimensionality reduction, noise reduction and matrix approximation. SVD is also used in image and text processing to compress images and enabling text-based recommendation respectively.
+
+### Correspondence Analysis
+Correspondence Analysis (CA) is a technique used to explore the relationship between *two* categorical variables usually in a contingency table. A contingency table is a table with the frequency distribution of the variables under question, showing how they relate with each other. CA will explain what is actually observed in the table and also what we would expect if the two variables had no relationship whatsoever. This technique will group together all categories that behaves similarly (appear with the same categories of the other variable), and place categories that differ far apart. CA will then reduce the information in the table to low-dimensions (usually two) so that the data can be visualiased graphically.
+
+The following code shows an example of how exactly CA is carried out. 
+
+```{r}
+# Contingency table
+N <- matrix(c(20, 10, 5,
+                 15, 25, 10,
+                 5, 10, 30),
+               nrow = 3, byrow = TRUE)
+
+rownames(N) <- c("Young", "Adult", "Senior")
+colnames(N) <- c("Car", "Bus", "Bike")
+
+# Convert counts to proportions
+n <- sum(N)
+P <- N / n     # correspondence matrix
+
+# Compute row and column masses
+r <- rowSums(P)   # row totals
+c <- colSums(P)   # column totals
+
+# center and standardize the matrix
+Dr_inv_sqrt <- diag(1 / sqrt(r))
+Dc_inv_sqrt <- diag(1 / sqrt(c))
+
+S <- Dr_inv_sqrt %*% (P - r %*% t(c)) %*% Dc_inv_sqrt
+
+# Apply SVD
+svd_CA <- svd(S)
+
+U <- svd_CA$u
+Sigma <- diag(svd_CA$d)
+V <- svd_CA$v
+
+# coordinates for plotting
+row_coords <- Dr_inv_sqrt %*% U %*% Sigma
+col_coords <- Dc_inv_sqrt %*% V %*% Sigma
+
+row_coords
+col_coords
+```
+
+This process can be applied automatically on any programming tool. We shall use an R code to show an example and give an intepretation of the results obtained.
+
+```{r}
+# Create a contingency table
+data <- matrix(c(20, 10, 5,
+                 15, 25, 10,
+                 5, 10, 30),
+               nrow = 3, byrow = TRUE)
+
+rownames(data) <- c("Young", "Adult", "Senior")
+colnames(data) <- c("Car", "Bus", "Bike")
+
+# Convert to table
+data_table <- as.table(data)
+
+# Perform Correspondence Analysis
+ca_result <- ca::ca(data_table)
+
+# Eigenvalues
+ca_result$eig
+
+# Row coordinates
+ca_result$rowcoord
+
+# Column coordinates
+ca_result$colcoord
+
+# Plot CA results
+plot(ca_result)
+```
+Young individuals are strongly associated with cars, while adults are associated with buses, as shown by their close proximity on the plot. Seniors are closely associated with bikes and are clearly separated from the other groups along Dimension 1, which captures most of the variation (83.5%). Categories far from the origin (e.g., Young–Car and Senior–Bike) represent the strongest and most distinctive relationships.
+
+In practice, CA is widely used in market research, social sciences, and survey analysis to explore
+relationships between categorical variables.
+
+# Multiple Correspondence analysis
+
+Multiple Correspondence Analysis (MCA)is an extension of CA. It is used when we have more than two categorical variables (usually from a questionnaire or survey). First, the technique forms the Indicator Matrix which is the answers in binary format (0 or 1). Each possible answer becomes a separate column, that is if a question has 3 possible answers (A, B, C), it becomes three columns. MCA then looks for patterns in these answers. Answers that are often chosen by the same people are considered similar and vise-versa. MCA will then summarise all the relationships into low-dimensional matrix (two or three), which represents the strongest pattern in the data.  
+
+## Key Concepts of MCA
+
+Inertia: This is the term for "variance" in MCA. It tells us how spread out the categories are.
+
+Dimensionality Reduction: It condenses dozens of survey questions into 2 or 3 "latent" factors (e.g., Urban vs. rural lifestyles).
+
+## Practical Use of MCA 
+
+Identifying profiles of respondents. For example, discovering that people who buy a certain Product X also tend to be aged 18-25, live in cities, and enjoy sports.
+
+```{r}
+# Create a data frame
+data <- data.frame(
+  Age    = c("Young", "Young", "Old", "Old"),
+  City   = c("Yes", "No", "Yes", "No"),
+  Sports = c("Yes", "Yes", "No", "No"))
+
+# Indicator matrix
+X <- model.matrix(~ Age + City + Sports - 1, data = data)
+
+# Convert to proportions
+n <- sum(X)
+P <- X / n
+
+# Compute masses
+r <- rowSums(P)
+c <- colSums(P)
+
+# Standardise
+Dr_inv_sqrt <- diag(1 / sqrt(r))
+Dc_inv_sqrt <- diag(1 / sqrt(c))
+
+S <- Dr_inv_sqrt %*% (P - r %*% t(c)) %*% Dc_inv_sqrt
+
+# Apply SVD
+svd_MCA <- svd(S)
+
+U <- svd_MCA$u
+Sigma <- diag(svd_MCA$d)
+V <- svd_MCA$v
+
+# category coordinates
+category_coords <- Dc_inv_sqrt %*% V %*% Sigma
+category_coords
+```
+
+Lets now apply the process using R functions and visualise the results.
+
+```{r}
+# Create a data frame
+data <- data.frame(
+  Age    = c("Young", "Young", "Old", "Old"),
+  City   = c("Yes", "No", "Yes", "No"),
+  Sports = c("Yes", "Yes", "No", "No"))
+
+# Perform MCA
+mca_result <- MCA(data, graph = FALSE)
+
+# Eigenvalues
+mca_result$eig
+
+# Individual coordinates
+mca_result$ind$coord
+
+# Variable categories coordinates
+mca_result$var$coord
+
+# Plot MCA results
+fviz_mca_biplot(mca_result, repel = TRUE)
+```
+Dimension 1 (66.7%) contrasts young, sports-oriented individuals with older, non-sports individuals, as shown by Young + Sports_Yes on the left and Old + Sports_No on the right. Dimension 2 (33.3%) mainly separates city residents from non-city residents, with City_Yes at the top and City_No at the bottom. Respondents located near these category points share similar profiles, while categories far from the origin represent the most distinctive characteristics.
+
+In practice, MCA is commonly used in survey analysis, sociology, psychology, and market segmentation
+to uncover hidden structures in categorical data.
+
+\newpage
+
+# Part II
+
+```{r}
+dataset <- read.csv("HDDAdataexam26.csv", sep = ";", dec = ",", header = TRUE, row.names = NULL)
+dataset
+```
+
+
+```{r}
+sum(is.na(dataset))
+```
+
+```{r}
+sum(duplicated(dataset))
+```
+
+```{r}
+dataset <- dataset[!duplicated(dataset), ]
+```
+
+
+```{r}
+sum(duplicated(dataset))
+```
+
+
+```{r, comment= ' '}
+summary(dataset)
+```
+
+```{r}
+library(corrplot)
+corrplot(cor(dataset))
+```
+
+```{r}
+res.pca <- PCA(dataset, graph = FALSE, scale.unit = FALSE)
+print(res.pca)
+```
+
+## Eigen values
+
+```{r echo=FALSE}
+library(rlang)
+eig.val=res.pca$eig
+eig.val
+```
+
+```{r}
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 90))
+```
+
+## The variables
+```{r echo=FALSE}
+resvar=res.pca$var
+resvar
+```
+
+```{r}
+fviz_pca_var(res.pca, col.var = "contrib")
+```
+
+## The inviduals
+
+```{r echo=FALSE}
+resind=res.pca$ind
+```
+
+```{r}
+fviz_pca_ind(res.pca)
+```
+
+# 1) Construct the following variables and add them to the dataframe ‘dataset'- 'LowInstagram' is a dummy taking the value 1 if 'InstagramRatio' is less than 0.5, and zero otherwise;- 'HighInstagram' is a dummy taking the value 1 if 'InstagramRatio' is greater than 2, and zero otherwise;
+
+
+```{r}
+dataset$LowInstagram  <- ifelse(dataset$InstagramRatio < 0.5, 1, 0)
+dataset$HighInstagram <- ifelse(dataset$InstagramRatio > 2, 1, 0)
+```
+
+
+# 2) We would like to investigate the smartphone addiction of AIMS students. Do a multiple regression with 'Phone' as dependent variable (Y) and the following independent (predictors) variables: 'SocialNetworks', 'Happiness', 'Walk', 'LowInstagram', and 'HighInstagram'.
+
+
+```{r}
+model_full <- lm(Phone ~ SocialNetworks + Happiness + Walk +
+             LowInstagram + HighInstagram, data = dataset)
+summary(model_full)
+```
+
+```{r}
+anova(model_full)
+```
+
+# 3) Is the regression model in 2) useful in predicting 'Phone' time?.
+
+
+ANSWER:
+The p-value of the global Fisher test is smaller than 2.2e-16, which is far below the 5% significance level. Therefore, we reject the null hypothesis that all regression coefficients are zero. This shows that the linear regression model is statistically significant and useful for predicting phone usage time among AIMS students.
+
+
+# 4) In the regression of 2), does 'SocialNetworks' significantly influence 'Phone'? 
+
+
+```{r}
+summary(model_full)$coefficients["SocialNetworks", ]
+```
+
+ANSWER:
+The variable SocialNetworks has a positive and highly significant effect on phone usage. Each additional minute spent on social networks increases phone time by approximately 0.91 minutes. The extremely small p-value (1.24e-60) confirms that this effect is statistically significant
+
+
+# 5) According to the regression in 2), does 'Happiness' help reduce the time AIMS students spend on their phone?
+
+```{r}
+summary(model_full)$coefficients["Happiness", ]
+```
+
+ANSWER:
+The variable Happiness has a negative and statistically significant effect on phone usage. Each additional point of happiness reduces the daily phone time by approximately 7.4 minutes. The p-value (0.0133) confirms that this effect is significant at the 5% level.
+
+
+# 6) Consider the regression output in 2) and two AIMS students A and B who provide exactly the same answers (120; 4; 15) for the variables 'SocialNetworks', 'Happiness' and 'Walk' respectively. Student A has an 'InstagramRatio' of 2.1 and Student B has a 'InstagramRatio' of 0.4. Give the predicted phone time for students A and B, respectively, denoted Phone(A) and Phone(B).
+
+
+```{r}
+studentA <- data.frame(SocialNetworks=120, Happiness=4, Walk=15,
+                LowInstagram=0, HighInstagram=1)
+
+studentB <- data.frame(SocialNetworks=120, Happiness=4, Walk=15,
+                LowInstagram=1, HighInstagram=0)
+
+PhoneA <- predict.lm(model_full, newdata = studentA)
+PhoneB <- predict.lm(model_full, newdata = studentB)
+
+PhoneA
+PhoneB
+```
+
+Interpretation:
+Using the linear regression model, the predicted phone time for student A is 142.4649, while for student B it is 195.1332 . The difference comes from the Instagram indicators, since student A has a high Instagram ratio whereas student B has a low Instagram ratio.
+
+
+# 7) Do a backward stepwise regression until you only have significant predictors left at the 5% significance level (it means delete one by one non-significant predictors beginning by the most non-significant).
+
+```{r}
+model_full <- lm(
+  Phone ~ SocialNetworks + Happiness + Walk + LowInstagram + HighInstagram,
+  data = dataset)
+
+backward_model1 <- step(model_full, direction = "backward")
+summary(backward_model1)
+```
+# Intepretation:
+
+After implementing the backward stepwise selection using the step() function, we notice that the algorithm did not remove all non-significant variables. Although the p-value of the model asserts the significance of model, we still have to explore other models that can be obtained using the backward stepwise selection. We try another model which does not include 'LowInstagram' as it has the highest p-value from the previous results.
+
+
+```{r}
+model_noLowInstagram <- lm(
+  Phone ~ SocialNetworks + Happiness + HighInstagram,
+  data = dataset)
+
+backward_model2 <- step(model_noLowInstagram, direction = "backward")
+summary(backward_model2)
+```
+# Intepretation:
+
+All variables are significant after removing 'LowInstagram'. We also notice that the difference in the adjusted-rsquared of the two models obtained using backward stewise selection isvery  low (0.0021) so we can select the simpler model(backward_model2 with less variables but more significant variables). In addition, the second model seems to reduce the AIC which is good.
+
+
+# 8) Choose the model among those you obtained in 2) and 7) that is the most useful one according to the significance of the predictors variables and adjusted coefficient of determination to predict 'Phone' time.
+
+
+```{r}
+adjR2_model1 <- summary(model_full)$adj.r.squared
+adjR2_model2 <- summary(backward_model2)$adj.r.squared
+
+adjR2_model1
+adjR2_model2
+```
+
+# Interpretation:
+
+The model obtained in 2) (model_full) has a smaller adjusted-rsquared that the model obtained in 7) (backward_model2) but the difference is very small (0.0013421). However 'Model_full' has more variables than 'backward_model2', majority of which are not significant. We therefore decide that that the 'backward_model2' is the most useful as it is simpler and has an okay adjusted-rsquared.
+
+
+# 9) Using the best model chosen in 8), give the predicted time an AIMS student spends watching his/her phone per day for a student who spends 30 minutes on social networks per day,  has a happiness score of 8, walks 2 kilometers a day and has an Instagram ratio of 2.1.
+
+
+```{r}
+# By using the best model backward_model2
+student1 <- data.frame(
+  SocialNetworks = 30,
+  Happiness = 8,
+  HighInstagram = ifelse(2.1 > 2, 1, 0)) # HighInstagram = 1
+
+Phone1 <- predict.lm(backward_model2, newdata = student1)
+Phone1
+```
+
+# Intepretation:
+
+An AIMS student who spends 30 minutes on social networks per day, has a happiness score of 8,walks 2 kilometers a day and has an Instagram ratio of 2.1 is predicted to spend roughly 38.58minutes on their phone.
+
+
+# 10) Using the best model chosen in 8), give the predicted time an AIMS student spends watching his/her phone per day for a student who spends 30 minutes on social networks per day, has a happiness score of 8, walks 2 kilometers a day and has an Instagram ratio of 0.4.
+
+
+```{r}
+# By using the best model backward_model2
+student2 <- data.frame(
+  SocialNetworks = 30,
+  Happiness = 8,
+  HighInstagram = ifelse(0.4 > 2, 1, 0)) # HighInstagram = 0
+
+Phone2 <- predict.lm(backward_model2, newdata = student2)
+Phone2
+```
+
+# Intepretantion
+
+An AIMS student who spends 30 minutes on social networks per day, has a happiness score of 8, walks 2 kilometers a day and has an Instagram ratio of 0.4 is predicted to spend approximately 78.02 minutes on their phone.
+
+
+# Conclusion 
+The final model shows that being in the 'highInstagram' group is associated with a significant decrease in daily Phone time, suggesting that 'influencer-type' profiles may have more curated or efficient usage patterns compared to others  users.
+ 
+\newpage
+
+# References
+
+Hastie, T., Tibshirani, R., & Friedman, J. (2009). The Elements of Statistical Learning: Data Mining, Inference, and Prediction (2nd ed.). Springers
+
+Sarah, M. (2025, December 15). Understanding Correspondence Analysis: A Comprehensive Guide for 2026. Displayr. https://www.displayr.com/understanding-correspondence-analysis-a-comprehensive-guide/
+
+Frost, F. J. (n.d.). Contingency Table: Definition, Examples & Interpreting. Statistics By Jim. Retrieved January 21, 2026, from https://statisticsbyjim.com/basics/contingency-table/
+
+Abdi, H. & Valentin, D. (2007). Multiple Correspondence Analysis. https://personal.utdallas.edu/~herve/Abdi-MCA2007-pretty.pdf
+
+Multiple Correspondence Analysis (MCA). (n.d.). XLSTAT, Your Data Analysis Solution. https://www.xlstat.com/solutions/features/multiple-correspondence-analysis-mca
+
+Khangar, N. V. & Kamalja, kk. k. (2017, October 14). Multiple Correspondence Analysis and its applications, https://www.researchgate.net/publication/320694285_Multiple_Correspondence_Analysis_and_its_applications
+
+7 Singular value decomposition – linear algebra. (n.d.). Linear Algebra. https://bookdown.org/dsciencelabs/lina/07-Singular-Value-Decomposition.html
+ 
+GeeksforGeeks. (2025, July 5). Singular Value Decomposition (SVD). GeeksforGeeks. https://www.geeksforgeeks.org/machine-learning/singular-value-decomposition-svd/
+
+Vaishnavi, V. Y. A. (2024, November 29). Advanced Applications of SVD in Image and Text Processing in 2025. Medium. Retrieved January 21, 2026, from https://medium.com/advanced-applications-of-svd-in-image-and-text-processing-in-2025-3de370badb18
